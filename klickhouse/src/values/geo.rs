@@ -2,12 +2,20 @@
 //! <https://clickhouse.com/docs/en/sql-reference/data-types/geo>
 use super::*;
 
+use itertools::Itertools;
+
 #[derive(Clone, Default, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Geo point, represented by its x and y coordinates.
 ///
 /// <https://clickhouse.com/docs/en/sql-reference/data-types/geo#point>
 pub struct Point(pub [f64; 2]);
+impl std::fmt::Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({},{})", self.0[0], self.0[1])
+    }
+}
+
 impl std::hash::Hash for Point {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         for x in self.0 {
@@ -26,24 +34,40 @@ impl AsRef<[f64; 2]> for Point {
         &self.0
     }
 }
+
+macro_rules! display_recurse {
+    ($t: ty) => {
+        impl std::fmt::Display for $t {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "[{}]", self.0.iter().map(|x| x.to_string()).join(","))
+            }
+        }
+    };
+}
+
 #[derive(Clone, Hash, Default, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Polygon without holes.
 ///
 /// <https://clickhouse.com/docs/en/sql-reference/data-types/geo#ring>
 pub struct Ring(pub Vec<Point>);
+display_recurse!(Ring);
+
 #[derive(Clone, Hash, Default, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Polygon with holes. The first element is the outer polygon, and the following ones are the holes.
 ///
 /// <https://clickhouse.com/docs/en/sql-reference/data-types/geo#polygon>
 pub struct Polygon(pub Vec<Ring>);
+display_recurse!(Polygon);
+
 #[derive(Clone, Hash, Default, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Union of polygons.
 ///
 /// <https://clickhouse.com/docs/en/sql-reference/data-types/geo#multipolygon>
 pub struct MultiPolygon(pub Vec<Polygon>);
+display_recurse!(MultiPolygon);
 
 macro_rules! to_from_sql {
     ($name:ident) => {

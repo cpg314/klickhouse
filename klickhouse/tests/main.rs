@@ -9,6 +9,7 @@ pub mod test_nested;
 pub mod test_ordering;
 pub mod test_raw_string;
 pub mod test_serialize;
+pub mod test_values;
 
 use klickhouse::{Client, ClientOptions};
 

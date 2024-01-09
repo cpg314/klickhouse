@@ -386,19 +386,19 @@ impl fmt::Display for Value {
                 write!(f, "'")
             }
             Value::Uuid(uuid) => {
-                write!(f, "'{}'", uuid)
+                write!(f, "toUUID('{}')", uuid)
             }
             Value::Date(date) => {
                 let chrono_date: NaiveDate = (*date).into();
-                write!(f, "'{}'", chrono_date.format("%Y-%m-%d"))
+                write!(f, "{}", chrono_date.format("makeDate(%Y,%m,%d)"))
             }
             Value::DateTime(datetime) => {
                 let chrono_date: chrono::DateTime<Tz> =
                     (*datetime).try_into().map_err(|_| fmt::Error)?;
                 let string = chrono_date.to_rfc3339_opts(SecondsFormat::AutoSi, true);
-                write!(f, "'")?;
+                write!(f, "parseDateTimeBestEffort('")?;
                 escape_string(f, &string)?;
-                write!(f, "'")
+                write!(f, "')")
             }
             Value::DateTime64(datetime) => {
                 let chrono_date: chrono::DateTime<Tz> =
@@ -446,10 +446,10 @@ impl fmt::Display for Value {
             }
             Value::Ipv4(ipv4) => write!(f, "'{ipv4}'"),
             Value::Ipv6(ipv6) => write!(f, "'{ipv6}'"),
-            Value::Point(x) => write!(f, "{:?}", x),
-            Value::Ring(x) => write!(f, "{:?}", x),
-            Value::Polygon(x) => write!(f, "{:?}", x),
-            Value::MultiPolygon(x) => write!(f, "{:?}", x),
+            Value::Point(x) => write!(f, "CAST({} AS Point)", x),
+            Value::Ring(x) => write!(f, "CAST({} AS Ring)", x),
+            Value::Polygon(x) => write!(f, "CAST({} AS Polygon)", x),
+            Value::MultiPolygon(x) => write!(f, "CAST({} AS MultiPolygon)", x),
         }
     }
 }
