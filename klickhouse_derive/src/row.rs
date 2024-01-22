@@ -56,7 +56,10 @@ fn build_generics(cont: &Container) -> syn::Generics {
 }
 
 fn needs_serialize_bound(field: &attr::Field) -> bool {
-    !field.skip_serializing() && field.serialize_with().is_none() && field.bound().is_none()
+    !field.skip_serializing()
+        && field.serialize_with().is_none()
+        && field.bound().is_none()
+        && !field.flatten()
 }
 
 impl Parameters {
