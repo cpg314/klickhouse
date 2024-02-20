@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::{types::Type, KlickhouseError, Result, Value};
 
@@ -57,4 +58,25 @@ pub trait Row: Sized {
         self,
         type_hints: &indexmap::IndexMap<String, Type>,
     ) -> Result<Vec<(Cow<'static, str>, Value)>>;
+}
+
+impl<T: Row + Clone> Row for Arc<T> {
+    const COLUMN_COUNT: Option<usize> = T::COLUMN_COUNT;
+
+    fn column_names() -> Option<Vec<Cow<'static, str>>> {
+        T::column_names()
+    }
+
+    fn deserialize_row(map: Vec<(&str, &Type, Value)>) -> Result<Self> {
+        T::deserialize_row(map).map(Arc::new)
+    }
+
+    fn serialize_row(
+        self,
+        type_hints: &indexmap::IndexMap<String, Type>,
+    ) -> Result<Vec<(Cow<'static, str>, Value)>> {
+        // TODO: In 1,76, there is `unwrap_or_clone`
+        let val = Arc::try_unwrap(self).unwrap_or_else(|arc| (*arc).clone());
+        T::serialize_row(val, type_hints)
+    }
 }
