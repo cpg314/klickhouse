@@ -245,8 +245,11 @@ impl<W: ClickhouseWrite> InternalClientOut<W> {
         Ok(())
     }
 
-    // pub async fn send_ping(&mut self) -> Result<()> {
-    //     self.writer.write_var_uint(protocol::ClientPacketId::Ping as u64).await?;
-    //     Ok(())
-    // }
+    pub async fn send_ping(&mut self) -> Result<()> {
+        self.writer
+            .write_var_uint(protocol::ClientPacketId::Ping as u64)
+            .await?;
+        self.writer.flush().await?;
+        Ok(())
+    }
 }

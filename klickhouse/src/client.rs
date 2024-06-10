@@ -40,6 +40,7 @@ struct InnerClient<R: ClickhouseRead, W: ClickhouseWrite> {
     pending_queries: VecDeque<PendingQuery>,
     executing_query: Option<(Uuid, mpsc::Sender<Result<Block>>)>,
     progress: broadcast::Sender<(Uuid, Progress)>,
+    ping: Option<oneshot::Sender<()>>,
 }
 
 struct PendingQuery {
@@ -52,6 +53,7 @@ impl<R: ClickhouseRead + 'static, W: ClickhouseWrite> InnerClient<R, W> {
         Self {
             input: InternalClientIn::new(reader),
             output: InternalClientOut::new(writer),
+            ping: None,
             options,
             pending_queries: VecDeque::new(),
             executing_query: None,
@@ -115,6 +117,10 @@ impl<R: ClickhouseRead + 'static, W: ClickhouseWrite> InnerClient<R, W> {
                     self.pending_queries.push_back(query);
                 }
             }
+            ClientRequestData::Ping { response } => {
+                self.ping = Some(response);
+                self.output.send_ping().await?;
+            }
             ClientRequestData::SendData { block, response } => {
                 self.output
                     .send_data(block, CompressionMethod::default(), "", false)
@@ -156,7 +162,11 @@ impl<R: ClickhouseRead + 'static, W: ClickhouseWrite> InnerClient<R, W> {
                     let _ = self.progress.send((*id, progress));
                 }
             }
-            ServerPacket::Pong => {}
+            ServerPacket::Pong => {
+                if let Some(ping) = self.ping.take() {
+                    let _ = ping.send(());
+                }
+            }
             ServerPacket::EndOfStream => {
                 if self.executing_query.take().is_none() {
                     return Err(KlickhouseError::ProtocolError(
@@ -221,6 +231,9 @@ enum ClientRequestData {
     },
     SendData {
         block: Block,
+        response: oneshot::Sender<()>,
+    },
+    Ping {
         response: oneshot::Sender<()>,
     },
 }
@@ -377,6 +390,10 @@ impl Client {
         })
         .await?;
 
+        // We send a ping to wait for the insertion to complete
+        // https://github.com/ClickHouse/ClickHouse/issues/65020
+        self.send_ping().await?;
+
         Ok(ReceiverStream::new(receiver))
     }
 
@@ -448,7 +465,23 @@ impl Client {
             column_data: IndexMap::new(),
         })
         .await?;
+        // We send a ping to wait for the insertion to complete
+        // https://github.com/ClickHouse/ClickHouse/issues/65020
+        self.send_ping().await?;
         Ok(())
+    }
+
+    pub async fn send_ping(&self) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.sender
+            .send(ClientRequest {
+                data: ClientRequestData::Ping { response: sender },
+            })
+            .await
+            .unwrap();
+        receiver
+            .await
+            .map_err(|_| KlickhouseError::ProtocolError("Receiver closed during ping".into()))
     }
 
     /// Wrapper over [`Client::insert_native`] to send a single block.
